@@ -4,6 +4,7 @@ Local image and OCR toolbox built with Tkinter.
 """
 
 import tkinter as tk
+import tkinter.font as tkfont
 
 from .config import ensure_runtime_dependencies
 from .config_store import load_api_key, save_api_key
@@ -11,6 +12,7 @@ from .image_service import auto_crop_passport, enhance_passport_image, make_whit
 from .ocr_service import ocr_passport
 from .pages.image_pages import build_image_tools_page
 from .pages.settings_page import build_settings_page
+from .widgets import RoundedButton
 
 ensure_runtime_dependencies()
 
@@ -19,11 +21,44 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("本地图片与 OCR 工具箱")
-        self.geometry("1100x720")
+        self.geometry("1180x820")
+        self.minsize(980, 700)
         self.resizable(True, True)
         self.configure(bg="#1e1e2e")
+        self.is_macos = self.tk.call("tk", "windowingsystem") == "aqua"
+        self.fonts = self._build_fonts()
+        self._configure_ui_defaults()
         self.pipellm_api_key = self._load_api_key()
         self._build_main()
+
+    def _build_fonts(self):
+        family = "PingFang SC" if self.is_macos else "Arial"
+        mono_family = "Menlo" if self.is_macos else "Courier"
+        return {
+            "title": (family, 15, "bold"),
+            "heading": (family, 13, "bold"),
+            "section": (family, 11, "bold"),
+            "body": (family, 11),
+            "small": (family, 10),
+            "mono": (mono_family, 10),
+            "button": (family, 11, "bold"),
+        }
+
+    def _configure_ui_defaults(self):
+        default_font = tkfont.nametofont("TkDefaultFont")
+        default_font.configure(family=self.fonts["body"][0], size=self.fonts["body"][1])
+        text_font = tkfont.nametofont("TkTextFont")
+        text_font.configure(family=self.fonts["body"][0], size=self.fonts["body"][1])
+        fixed_font = tkfont.nametofont("TkFixedFont")
+        fixed_font.configure(family=self.fonts["mono"][0], size=self.fonts["mono"][1])
+        heading_font = tkfont.nametofont("TkHeadingFont")
+        heading_font.configure(family=self.fonts["section"][0], size=self.fonts["section"][1], weight="bold")
+        self.option_add("*Label.Font", self.fonts["body"])
+        self.option_add("*Button.Font", self.fonts["body"])
+        self.option_add("*Entry.Font", self.fonts["body"])
+        self.option_add("*Checkbutton.Font", self.fonts["body"])
+        self.option_add("*Radiobutton.Font", self.fonts["body"])
+        self.option_add("*LabelFrame.Font", self.fonts["section"])
 
     def _build_main(self):
         self._clear()
@@ -34,20 +69,19 @@ class App(tk.Tk):
         tk.Label(
             top,
             text="本地图片与 OCR 工具箱",
-            font=("Arial", 14, "bold"),
+            font=self.fonts["heading"],
             bg="#181825",
             fg="#cba6f7",
         ).pack(side="left", padx=16, pady=10)
 
-        body = tk.Frame(self, bg="#1e1e2e")
-        body.pack(fill="both", expand=True)
+        self.body = tk.Frame(self, bg="#1e1e2e")
+        self.body.pack(fill="both", expand=True)
 
-        sidebar = tk.Frame(body, bg="#181825", width=190)
+        sidebar = tk.Frame(self.body, bg="#181825", width=190)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
-        self.content = tk.Frame(body, bg="#1e1e2e")
-        self.content.pack(side="left", fill="both", expand=True)
+        self._recreate_content()
 
         tool_menus = [
             ("图片工具", self._page_image_tools),
@@ -59,25 +93,21 @@ class App(tk.Tk):
             text="本地工具",
             bg="#181825",
             fg="#6c7086",
-            font=("Arial", 9),
+            font=self.fonts["small"],
         ).pack(pady=(16, 4), padx=12, anchor="w")
 
         self._menu_btns = []
         for label, cmd in tool_menus:
-            btn = tk.Button(
+            btn = RoundedButton(
                 sidebar,
+                font=self.fonts["body"],
                 text=label,
-                anchor="w",
-                padx=12,
-                font=("Arial", 11),
-                bg="#181825",
-                fg="#f9e2af",
-                relief="flat",
-                cursor="hand2",
-                activebackground="#313244",
+                variant="sidebar",
+                width=150,
+                radius=12,
                 command=lambda c=cmd: self._menu_click(c),
             )
-            btn.pack(fill="x", pady=1)
+            btn.pack(pady=4, padx=12, anchor="w")
             self._menu_btns.append(btn)
 
         self._page_image_tools()
@@ -90,8 +120,13 @@ class App(tk.Tk):
             widget.destroy()
 
     def _clear_content(self):
-        for widget in self.content.winfo_children():
-            widget.destroy()
+        if hasattr(self, "content") and self.content.winfo_exists():
+            self.content.destroy()
+        self._recreate_content()
+
+    def _recreate_content(self):
+        self.content = tk.Frame(self.body, bg="#1e1e2e")
+        self.content.pack(side="left", fill="both", expand=True)
 
     def _load_api_key(self):
         return load_api_key()

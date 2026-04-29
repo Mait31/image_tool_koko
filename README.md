@@ -59,45 +59,72 @@ python -m koko_app
 
 如果不打包成 `.app`，在 macOS 上直接运行源码通常更稳：
 
-### 先安装 Python
+### 推荐运行标准
 
-推荐方式：
+建议使用以下组合：
 
-1. 打开 `https://www.python.org/downloads/macos/`
-2. 下载并安装 `Python 3.11`
-3. 安装完成后，在终端里确认：
+- `Python 3.11`
+- `Tk 8.6`
 
-```bash
-python3 --version
-python3 -c "import tkinter; print(tkinter.TkVersion)"
-```
+如果 `Tk` 版本过旧，或者当前 `Python 3.11` 没有正确接上 `tkinter`，界面在 macOS 上可能会出现：
 
-如果第二条命令能正常输出版本号，说明当前 Python 自带的 `tkinter` 可用。
+- 页面切换后控件残留 / 叠加
+- 布局错位
+- 原生按钮样式过亮、和 Windows 表现差异很大
 
-也可以用 Homebrew 安装：
+这次在本机实际验证通过的方案是：
 
-```bash
-brew install python@3.11
-```
+- Homebrew `python@3.11`
+- Homebrew `python-tk@3.11`
+- Homebrew `tcl-tk@8`
 
-如果你的 Mac 还没有安装 Homebrew，可以先在终端执行：
+仅安装 `python@3.11` 不一定够用；有些机器上它可以运行 Python，但 `import tkinter` 会失败，或者会退回到不合适的 Tk 版本。
 
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
+### 先检查当前环境
 
-安装完 Python 后，可以继续验证：
+先在终端确认：
 
 ```bash
 python3.11 --version
 python3.11 -c "import tkinter; print(tkinter.TkVersion)"
 ```
 
-### 再运行项目源码
+期望结果：
+
+- 能正常 `import tkinter`
+- 输出的 `TkVersion` 为 `8.6`
+
+如果这里报错，或者版本不是 `8.6`，不要继续按旧流程直接跑项目。
+
+### 用 Homebrew 安装推荐环境
+
+如果你的 Mac 还没有安装 Homebrew，可以先执行：
 
 ```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+然后安装：
+
+```bash
+brew install python@3.11 python-tk@3.11 tcl-tk@8
+```
+
+安装完成后再次确认：
+
+```bash
+python3.11 -c "import tkinter; print(tkinter.TkVersion)"
+```
+
+如果输出是 `8.6`，再继续下面步骤。
+
+### 再运行项目源码
+
+推荐单独使用一个 macOS 运行环境，例如：
+
+```bash
+python3.11 -m venv .venv311
+source .venv311/bin/activate
 pip install -r requirements.txt
 python koko_gui.py
 ```
@@ -108,10 +135,37 @@ python koko_gui.py
 python -m koko_app
 ```
 
+### 之前的旧流程为什么在这台机器上跑不通
+
+之前 `README` 里写的思路是：
+
+- 安装 `python@3.11`
+- 建虚拟环境
+- `pip install -r requirements.txt`
+- `python koko_gui.py`
+
+这在某些 macOS 机器上不成立，原因是：
+
+- `python3.11` 可能没有可用的 `tkinter`
+- 或者实际连到的不是合适的 `Tk 8.6`
+- 项目本身能装依赖，但 GUI 启动后布局和行为会异常
+
+在这台机器上，实际情况就是：
+
+- Homebrew 的 `python3.11` 一开始不能正常加载 `tkinter`
+- 系统自带 Python 虽然能跑 `tkinter`，但对应的是旧版 `Tk 8.5`
+- 旧版 `Tk 8.5` 会导致界面和 Windows 差异明显，甚至出现页面切换异常
+
+所以现在推荐把 macOS 运行标准固定为：
+
+```bash
+Python 3.11 + Tk 8.6
+```
+
 说明：
 
-- 需要本机 `python3` 可用
-- 需要当前 Python 自带可用的 `tkinter`
+- 不建议在 macOS 上继续依赖系统自带旧版 `Tk`
+- 推荐先验证 `python3.11 -c "import tkinter; print(tkinter.TkVersion)"`
 - 如果要用 OCR，在“设置”中填写 `PipeLLM API Key`
 - 如果要获得更好的白底处理效果，建议额外安装 `rembg[cpu]` 并下载 `U2Net` 模型
 
@@ -151,6 +205,13 @@ python -m koko_app
 ## macOS 说明
 
 项目代码本身基本跨平台，但 `.app` 需要在 macOS 上单独构建。Windows 不能可靠地产出最终可分发的 macOS 桌面应用。
+
+当前仓库里的界面调整没有改动 Windows 打包脚本，也没有引入仅限 macOS 的运行时依赖。按钮和布局改动仍然基于标准 `Tkinter` / `Canvas`，原则上不会阻断 Windows 部署。
+
+但需要注意：
+
+- Windows 上的视觉样式会和之前不一样，因为按钮已经改成项目自绘样式
+- `PyInstaller` 打包前，仍然建议在 Windows 机器上实际跑一遍界面并做一次打包验证
 
 ## 项目结构
 

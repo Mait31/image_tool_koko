@@ -2,6 +2,65 @@ import tkinter as tk
 from tkinter import ttk
 
 from ..image_service import get_rembg_state
+from ..widgets import RoundedButton
+
+
+def _build_scrollable_page(parent, bg):
+    canvas = tk.Canvas(parent, bg=bg, highlightthickness=0)
+    vsb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+    canvas.configure(yscrollcommand=vsb.set)
+    vsb.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
+
+    outer = tk.Frame(canvas, bg=bg)
+    inner = tk.Frame(outer, bg=bg)
+    inner.pack(fill="x", expand=True, padx=16, pady=0)
+    win_id = canvas.create_window((0, 0), window=outer, anchor="nw")
+
+    def sync_scrollregion(_event=None):
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    def resize_inner(event):
+        width = min(max(event.width - 16, 760), 980)
+        canvas.itemconfig(win_id, width=event.width)
+        inner.configure(width=width)
+
+    def on_mousewheel(event):
+        if not canvas.winfo_exists():
+            return
+        delta = getattr(event, "delta", 0)
+        if delta:
+            canvas.yview_scroll(int(-1 * (delta / 120)), "units")
+            return
+        if getattr(event, "num", None) == 4:
+            canvas.yview_scroll(-1, "units")
+        elif getattr(event, "num", None) == 5:
+            canvas.yview_scroll(1, "units")
+
+    def bind_mousewheel(_event=None):
+        canvas.bind_all("<MouseWheel>", on_mousewheel)
+        canvas.bind_all("<Button-4>", on_mousewheel)
+        canvas.bind_all("<Button-5>", on_mousewheel)
+
+    def unbind_mousewheel(_event=None):
+        canvas.unbind_all("<MouseWheel>")
+        canvas.unbind_all("<Button-4>")
+        canvas.unbind_all("<Button-5>")
+
+    outer.bind("<Configure>", sync_scrollregion)
+    canvas.bind("<Configure>", resize_inner)
+    canvas.bind("<Enter>", bind_mousewheel)
+    canvas.bind("<Leave>", unbind_mousewheel)
+    return inner
+
+
+def _make_section(parent, title, fonts, title_fg="#f9e2af"):
+    section = tk.Frame(parent, bg="#313244", padx=12, pady=10)
+    section.pack(fill="x", pady=6)
+    tk.Label(section, text=title, bg="#313244", fg=title_fg, font=fonts["section"]).pack(
+        anchor="w", pady=(0, 8)
+    )
+    return section
 
 
 def build_image_tools_page(app):
@@ -13,34 +72,22 @@ def build_image_tools_page(app):
     import tkinter.ttk as ttk2
     from tkinter import filedialog, messagebox, scrolledtext
 
-    canvas = tk.Canvas(self.content, bg="#1e1e2e", highlightthickness=0)
-    vsb = ttk2.Scrollbar(self.content, orient="vertical", command=canvas.yview)
-    canvas.configure(yscrollcommand=vsb.set)
-    vsb.pack(side="right", fill="y")
-    canvas.pack(side="left", fill="both", expand=True)
-    inner = tk.Frame(canvas, bg="#1e1e2e")
-    win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+    inner = _build_scrollable_page(self.content, "#1e1e2e")
 
-    inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-    canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
-    canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
-    canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
-    canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
-
-    tk.Label(inner, text="🛠 图片工具", font=("Arial", 15, "bold"), bg="#1e1e2e", fg="#f9e2af").pack(
-        anchor="w", padx=16, pady=(12, 2)
+    tk.Label(inner, text="🛠 图片工具", font=self.fonts["title"], bg="#1e1e2e", fg="#f9e2af").pack(
+        anchor="w", pady=(12, 2)
     )
     tk.Label(
         inner,
         text="批量处理文件夹内的护照 PDF / 图片：自动裁剪、可选换白底、可选压缩大小。",
         bg="#1e1e2e",
         fg="#6c7086",
-        font=("Arial", 10),
-    ).pack(anchor="w", padx=16, pady=(0, 10))
+        font=self.fonts["small"],
+        justify="left",
+        wraplength=920,
+    ).pack(anchor="w", pady=(0, 10))
 
-    pad = dict(padx=16, pady=4)
-    sec1 = tk.LabelFrame(inner, text=" 选择文件夹 ", bg="#313244", fg="#f9e2af", font=("Arial", 11, "bold"), padx=12, pady=8)
-    sec1.pack(fill="x", **pad)
+    sec1 = _make_section(inner, "选择文件夹", self.fonts)
 
     folder_var = tk.StringVar(value="")
     folder_label = tk.StringVar(value="（未选择）")
@@ -67,21 +114,28 @@ def build_image_tools_page(app):
 
     row = tk.Frame(sec1, bg="#313244")
     row.pack(fill="x")
-    tk.Label(row, textvariable=folder_label, bg="#313244", fg="#cdd6f4", font=("Arial", 10), width=52, anchor="w").pack(side="left")
-    tk.Button(
+    row.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        row,
+        textvariable=folder_label,
+        bg="#313244",
+        fg="#cdd6f4",
+        font=self.fonts["small"],
+        anchor="w",
+        justify="left",
+        wraplength=720,
+    ).grid(row=0, column=0, sticky="ew")
+    RoundedButton(
         row,
         text="选择文件夹",
-        bg="#89b4fa",
-        fg="#1e1e2e",
-        relief="flat",
-        cursor="hand2",
-        font=("Arial", 10, "bold"),
+        font=self.fonts["button"],
+        variant="accent",
         command=choose_folder,
-    ).pack(side="left", padx=(8, 0))
-    tk.Label(sec1, textvariable=count_var, bg="#313244", fg="#a6e3a1", font=("Arial", 10)).pack(anchor="w", pady=(4, 0))
+        min_width=110,
+    ).grid(row=0, column=1, sticky="e", padx=(12, 0))
+    tk.Label(sec1, textvariable=count_var, bg="#313244", fg="#a6e3a1", font=self.fonts["small"]).pack(anchor="w", pady=(4, 0))
 
-    sec2 = tk.LabelFrame(inner, text=" 处理选项 ", bg="#313244", fg="#f9e2af", font=("Arial", 11, "bold"), padx=12, pady=8)
-    sec2.pack(fill="x", **pad)
+    sec2 = _make_section(inner, "处理选项", self.fonts)
 
     opt_crop = tk.BooleanVar(value=True)
     opt_whitebg = tk.BooleanVar(value=True)
@@ -97,7 +151,7 @@ def build_image_tools_page(app):
         fg="#cdd6f4",
         selectcolor="#45475a",
         activebackground="#313244",
-        font=("Arial", 10),
+        font=self.fonts["small"],
     ).pack(anchor="w")
     tk.Checkbutton(
         sec2,
@@ -107,7 +161,7 @@ def build_image_tools_page(app):
         fg="#cdd6f4",
         selectcolor="#45475a",
         activebackground="#313244",
-        font=("Arial", 10),
+        font=self.fonts["small"],
     ).pack(anchor="w")
     tk.Checkbutton(
         sec2,
@@ -117,13 +171,13 @@ def build_image_tools_page(app):
         fg="#cdd6f4",
         selectcolor="#45475a",
         activebackground="#313244",
-        font=("Arial", 10),
+        font=self.fonts["small"],
     ).pack(anchor="w")
 
     size_row = tk.Frame(sec2, bg="#313244")
     size_row.pack(anchor="w", padx=(22, 0))
-    tk.Label(size_row, text="最大 KB:", bg="#313244", fg="#6c7086", font=("Arial", 10)).pack(side="left")
-    tk.Entry(size_row, textvariable=max_kb_var, width=6, bg="#45475a", fg="#cdd6f4", relief="flat", font=("Arial", 10)).pack(
+    tk.Label(size_row, text="最大 KB:", bg="#313244", fg="#6c7086", font=self.fonts["small"]).pack(side="left")
+    tk.Entry(size_row, textvariable=max_kb_var, width=8, bg="#45475a", fg="#cdd6f4", relief="flat", font=self.fonts["small"]).pack(
         side="left", padx=4
     )
 
@@ -135,7 +189,7 @@ def build_image_tools_page(app):
         fg="#cdd6f4",
         selectcolor="#45475a",
         activebackground="#313244",
-        font=("Arial", 10),
+        font=self.fonts["small"],
     ).pack(anchor="w")
 
     out_mode = tk.StringVar(value="subfolder")
@@ -148,7 +202,7 @@ def build_image_tools_page(app):
         fg="#cdd6f4",
         selectcolor="#45475a",
         activebackground="#313244",
-        font=("Arial", 10),
+        font=self.fonts["small"],
     ).pack(anchor="w", pady=(6, 0))
     tk.Radiobutton(
         sec2,
@@ -159,19 +213,18 @@ def build_image_tools_page(app):
         fg="#f38ba8",
         selectcolor="#45475a",
         activebackground="#313244",
-        font=("Arial", 10),
+        font=self.fonts["small"],
     ).pack(anchor="w")
 
-    sec3 = tk.LabelFrame(inner, text=" 处理进度 ", bg="#313244", fg="#f9e2af", font=("Arial", 11, "bold"), padx=12, pady=8)
-    sec3.pack(fill="x", **pad)
+    sec3 = _make_section(inner, "处理进度", self.fonts)
     prog_var = tk.StringVar(value="等待开始...")
     summary_var = tk.StringVar(value="")
-    tk.Label(sec3, textvariable=prog_var, bg="#313244", fg="#cdd6f4", font=("Arial", 10)).pack(anchor="w")
+    tk.Label(sec3, textvariable=prog_var, bg="#313244", fg="#cdd6f4", font=self.fonts["small"]).pack(anchor="w")
     bar = ttk2.Progressbar(sec3, mode="determinate", length=600)
     bar.pack(fill="x", pady=4)
-    tk.Label(sec3, textvariable=summary_var, bg="#313244", fg="#a6e3a1", font=("Arial", 10, "bold")).pack(anchor="w")
+    tk.Label(sec3, textvariable=summary_var, bg="#313244", fg="#a6e3a1", font=self.fonts["section"], justify="left", wraplength=920).pack(anchor="w")
 
-    log_box = scrolledtext.ScrolledText(sec3, height=8, bg="#181825", fg="#cdd6f4", font=("Courier", 9), wrap="word", state="disabled")
+    log_box = scrolledtext.ScrolledText(sec3, height=8, bg="#181825", fg="#cdd6f4", font=self.fonts["mono"], wrap="word", state="disabled")
     log_box.pack(fill="x", pady=(4, 0))
 
     def log(msg):
@@ -181,31 +234,23 @@ def build_image_tools_page(app):
         log_box.config(state="disabled")
 
     btn_row = tk.Frame(inner, bg="#1e1e2e")
-    btn_row.pack(anchor="w", padx=16, pady=8)
+    btn_row.pack(anchor="w", pady=10)
 
-    start_btn = tk.Button(
+    start_btn = RoundedButton(
         btn_row,
         text="▶ 开始处理",
-        bg="#a6e3a1",
-        fg="#1e1e2e",
-        relief="flat",
-        cursor="hand2",
-        font=("Arial", 12, "bold"),
-        padx=20,
-        pady=8,
+        font=self.fonts["button"],
+        variant="primary",
+        min_width=120,
     )
     start_btn.pack(side="left", padx=(0, 12))
-    tk.Button(
+    RoundedButton(
         btn_row,
         text="清空日志",
-        bg="#45475a",
-        fg="#cdd6f4",
-        relief="flat",
-        cursor="hand2",
-        font=("Arial", 10),
-        padx=10,
-        pady=8,
+        font=self.fonts["small"],
+        variant="secondary",
         command=lambda: (log_box.config(state="normal"), log_box.delete("1.0", "end"), log_box.config(state="disabled")),
+        min_width=88,
     ).pack(side="left")
 
     def start_processing():
@@ -220,7 +265,7 @@ def build_image_tools_page(app):
         recurse = opt_subdir.get()
         mode = out_mode.get()
 
-        start_btn.config(state="disabled", text="处理中...")
+        start_btn.configure_button(state="disabled", text="处理中...")
         summary_var.set("")
 
         def worker():
@@ -240,7 +285,7 @@ def build_image_tools_page(app):
 
             if total == 0:
                 self.after(0, lambda: prog_var.set("未找到 PDF 或图片文件"))
-                self.after(0, lambda: start_btn.config(state="normal", text="▶ 开始处理"))
+                self.after(0, lambda: start_btn.configure_button(state="normal", text="▶ 开始处理"))
                 return
 
             ok = fail = 0
@@ -313,11 +358,11 @@ def build_image_tools_page(app):
             out_desc = os.path.join(folder, "processed") if mode == "subfolder" else "原位置（已覆盖）"
             self.after(0, lambda: prog_var.set("✅ 全部处理完成"))
             self.after(0, lambda: summary_var.set(f"✅ 成功 {ok}  ❌ 失败 {fail}  共 {total} 个 -> 输出: {out_desc}"))
-            self.after(0, lambda: start_btn.config(state="normal", text="▶ 开始处理"))
+            self.after(0, lambda: start_btn.configure_button(state="normal", text="▶ 开始处理"))
 
         threading.Thread(target=worker, daemon=True).start()
 
-    start_btn.config(command=start_processing)
+    start_btn.configure_button(command=start_processing)
 
 
 def build_photo_whitebg_page(app):
@@ -346,19 +391,10 @@ def build_photo_whitebg_page_body(app):
     from tkinter import filedialog
     from tkinter.scrolledtext import ScrolledText
 
-    canvas = tk.Canvas(self.content, bg="#1e1e2e", highlightthickness=0)
-    vsb = ttk.Scrollbar(self.content, orient="vertical", command=canvas.yview)
-    canvas.configure(yscrollcommand=vsb.set)
-    vsb.pack(side="right", fill="y")
-    canvas.pack(side="left", fill="both", expand=True)
-    inner = tk.Frame(canvas, bg="#1e1e2e")
-    win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
-    inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-    canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
-    canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+    inner = _build_scrollable_page(self.content, "#1e1e2e")
 
-    tk.Label(inner, text="🎭 证件照换白底", font=("Arial", 15, "bold"), bg="#1e1e2e", fg="#cba6f7").pack(
-        anchor="w", padx=16, pady=(12, 2)
+    tk.Label(inner, text="🎭 证件照换白底", font=self.fonts["title"], bg="#1e1e2e", fg="#cba6f7").pack(
+        anchor="w", pady=(12, 2)
     )
 
     def rembg_state_info():
@@ -373,34 +409,31 @@ def build_photo_whitebg_page_body(app):
     state, state_msg = rembg_state_info()
     state_color = {"ready": "#a6e3a1", "no_model": "#f9e2af", "no_rembg": "#f38ba8"}[state]
     status_var = tk.StringVar(value=state_msg)
-    tk.Label(inner, textvariable=status_var, bg="#1e1e2e", fg=state_color, font=("Arial", 10)).pack(
-        anchor="w", padx=16, pady=(0, 4)
+    tk.Label(inner, textvariable=status_var, bg="#1e1e2e", fg=state_color, font=self.fonts["small"]).pack(
+        anchor="w", pady=(0, 4)
     )
 
     if state != "ready":
-        tk.Button(
+        RoundedButton(
             inner,
             text="⚙️ 前往设置安装 / 下载模型",
-            bg="#cba6f7",
-            fg="#1e1e2e",
-            relief="flat",
-            cursor="hand2",
-            font=("Arial", 11, "bold"),
-            padx=14,
-            pady=6,
+            font=self.fonts["button"],
+            variant="purple",
+            min_width=220,
             command=self._page_settings,
-        ).pack(anchor="w", padx=16, pady=(0, 8))
+        ).pack(anchor="w", pady=(0, 8))
 
-    mode_sec = tk.LabelFrame(inner, text=" 处理模式 ", bg="#313244", fg="#cba6f7", font=("Arial", 11, "bold"), padx=12, pady=8)
-    mode_sec.pack(fill="x", padx=16, pady=4)
+    mode_sec = _make_section(inner, "处理模式", self.fonts, "#cba6f7")
     mode_var = tk.StringVar(value="single")
-    tk.Radiobutton(mode_sec, text="单张图片", variable=mode_var, value="single", bg="#313244", fg="#cdd6f4", selectcolor="#45475a", activebackground="#313244", font=("Arial", 10)).pack(side="left", padx=(0, 20))
-    tk.Radiobutton(mode_sec, text="批量处理文件夹", variable=mode_var, value="batch", bg="#313244", fg="#cdd6f4", selectcolor="#45475a", activebackground="#313244", font=("Arial", 10)).pack(side="left")
+    tk.Radiobutton(mode_sec, text="单张图片", variable=mode_var, value="single", bg="#313244", fg="#cdd6f4", selectcolor="#45475a", activebackground="#313244", font=self.fonts["small"]).pack(side="left", padx=(0, 20))
+    tk.Radiobutton(mode_sec, text="批量处理文件夹", variable=mode_var, value="batch", bg="#313244", fg="#cdd6f4", selectcolor="#45475a", activebackground="#313244", font=self.fonts["small"]).pack(side="left")
 
-    path_sec = tk.LabelFrame(inner, text=" 选择文件 ", bg="#313244", fg="#cba6f7", font=("Arial", 11, "bold"), padx=12, pady=8)
-    path_sec.pack(fill="x", padx=16, pady=4)
+    path_sec = _make_section(inner, "选择文件", self.fonts, "#cba6f7")
     path_var = tk.StringVar(value="（未选择）")
-    tk.Label(path_sec, textvariable=path_var, bg="#313244", fg="#cdd6f4", font=("Arial", 10), anchor="w", width=55).pack(side="left")
+    path_row = tk.Frame(path_sec, bg="#313244")
+    path_row.pack(fill="x")
+    path_row.grid_columnconfigure(0, weight=1)
+    tk.Label(path_row, textvariable=path_var, bg="#313244", fg="#cdd6f4", font=self.fonts["small"], anchor="w", justify="left", wraplength=720).grid(row=0, column=0, sticky="ew")
     selected = {"files": []}
 
     def choose():
@@ -416,20 +449,16 @@ def build_photo_whitebg_page_body(app):
                 selected["files"] = files
                 path_var.set(f"{folder}（{len(files)} 张）")
 
-    tk.Button(
-        path_sec,
+    RoundedButton(
+        path_row,
         text="选择",
-        bg="#89b4fa",
-        fg="#1e1e2e",
-        relief="flat",
-        cursor="hand2",
-        font=("Arial", 10, "bold"),
-        padx=12,
+        font=self.fonts["button"],
+        variant="accent",
+        min_width=88,
         command=choose,
-    ).pack(side="left", padx=(8, 0))
+    ).grid(row=0, column=1, sticky="e", padx=(12, 0))
 
-    opt_sec = tk.LabelFrame(inner, text=" 输出选项 ", bg="#313244", fg="#cba6f7", font=("Arial", 11, "bold"), padx=12, pady=8)
-    opt_sec.pack(fill="x", padx=16, pady=4)
+    opt_sec = _make_section(inner, "输出选项", self.fonts, "#cba6f7")
     overwrite_var = tk.BooleanVar(value=False)
     tk.Checkbutton(
         opt_sec,
@@ -439,18 +468,17 @@ def build_photo_whitebg_page_body(app):
         fg="#cdd6f4",
         selectcolor="#45475a",
         activebackground="#313244",
-        font=("Arial", 10),
+        font=self.fonts["small"],
     ).pack(anchor="w")
 
-    prog_sec = tk.LabelFrame(inner, text=" 进度 ", bg="#313244", fg="#cba6f7", font=("Arial", 11, "bold"), padx=12, pady=8)
-    prog_sec.pack(fill="x", padx=16, pady=4)
+    prog_sec = _make_section(inner, "进度", self.fonts, "#cba6f7")
     prog_var = tk.StringVar(value="")
-    tk.Label(prog_sec, textvariable=prog_var, bg="#313244", fg="#cdd6f4", font=("Arial", 10)).pack(anchor="w")
+    tk.Label(prog_sec, textvariable=prog_var, bg="#313244", fg="#cdd6f4", font=self.fonts["small"]).pack(anchor="w")
     bar = ttk.Progressbar(prog_sec, mode="determinate")
     bar.pack(fill="x", pady=(4, 0))
 
-    log_box = ScrolledText(inner, height=10, bg="#181825", fg="#a6e3a1", font=("Courier", 9), wrap="word")
-    log_box.pack(fill="x", padx=16, pady=(4, 4))
+    log_box = ScrolledText(inner, height=10, bg="#181825", fg="#a6e3a1", font=self.fonts["mono"], wrap="word")
+    log_box.pack(fill="x", pady=(4, 4))
 
     def log(msg):
         self.after(0, lambda m=msg: (log_box.insert("end", m + "\n"), log_box.see("end")))
@@ -467,7 +495,7 @@ def build_photo_whitebg_page_body(app):
         log_box.delete("1.0", "end")
         bar["maximum"] = len(files)
         bar["value"] = 0
-        start_btn.config(state="disabled", text="处理中...")
+        start_btn.configure_button(state="disabled", text="处理中...")
 
         def worker():
             ok = fail = 0
@@ -494,20 +522,18 @@ def build_photo_whitebg_page_body(app):
                 self.after(0, lambda v=idx + 1: bar.configure(value=v))
 
             self.after(0, lambda: prog_var.set(f"✅ 完成  成功 {ok}  失败 {fail}"))
-            self.after(0, lambda: start_btn.config(state="normal", text="▶ 开始处理"))
+            self.after(0, lambda: start_btn.configure_button(state="normal", text="▶ 开始处理"))
 
         threading.Thread(target=worker, daemon=True).start()
 
-    start_btn = tk.Button(
+    start_btn = RoundedButton(
         inner,
         text="▶ 开始处理",
-        bg="#a6e3a1" if state == "ready" else "#45475a",
-        fg="#1e1e2e",
-        relief="flat",
-        cursor="hand2",
-        font=("Arial", 12, "bold"),
-        padx=20,
-        pady=8,
+        font=self.fonts["button"],
+        variant="primary" if state == "ready" else "secondary",
+        min_width=120,
         command=start,
     )
+    if state != "ready":
+        start_btn.configure_button(state="disabled")
     start_btn.pack(anchor="w", padx=16, pady=(4, 16))

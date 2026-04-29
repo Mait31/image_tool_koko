@@ -4,6 +4,8 @@ from tkinter import ttk
 
 from ..config import PIPELLM_BASE_URL, PIPELLM_MODEL, U2NET_MODEL_DIR, U2NET_MODEL_PATH
 from ..image_service import get_rembg_state
+from .image_pages import _build_scrollable_page
+from ..widgets import RoundedButton
 
 
 def build_settings_page(app):
@@ -11,46 +13,35 @@ def build_settings_page(app):
     self._clear_content()
     from tkinter import scrolledtext as _st
 
-    outer = tk.Frame(self.content, bg="#1e1e2e")
-    outer.pack(fill="both", expand=True)
-    canvas = tk.Canvas(outer, bg="#1e1e2e", highlightthickness=0)
-    scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
-    canvas.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side="right", fill="y")
-    canvas.pack(side="left", fill="both", expand=True)
+    inner = _build_scrollable_page(self.content, "#1e1e2e")
 
-    inner = tk.Frame(canvas, bg="#1e1e2e")
-    win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
-    inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-    canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
-
-    tk.Label(inner, text="⚙️ 设置", font=("Arial", 15, "bold"),
-             bg="#1e1e2e", fg="#cba6f7").pack(anchor="w", padx=16, pady=(12, 2))
+    tk.Label(inner, text="⚙️ 设置", font=self.fonts["title"],
+             bg="#1e1e2e", fg="#cba6f7").pack(anchor="w", pady=(12, 2))
 
     def make_section(parent, title):
-        frame = tk.LabelFrame(
-            parent,
-            text=f" {title} ",
+        frame = tk.Frame(parent, bg="#313244", padx=16, pady=12)
+        frame.pack(fill="x", pady=(12, 0))
+        tk.Label(
+            frame,
+            text=title,
             bg="#313244",
             fg="#89b4fa",
-            font=("Arial", 11, "bold"),
-            padx=16,
-            pady=12,
-        )
-        frame.pack(fill="x", padx=16, pady=(12, 0))
+            font=self.fonts["section"],
+        ).pack(anchor="w", pady=(0, 10))
         return frame
 
     sec1 = make_section(inner, "PipeLLM API Key（本地 OCR / AI 辅助）")
     box = tk.Frame(sec1, bg="#313244")
     box.pack(fill="x")
+    box.grid_columnconfigure(1, weight=1)
 
     tk.Label(box, text="API Key:", bg="#313244", fg="#cdd6f4",
-             font=("Arial", 11)).grid(row=0, column=0, sticky="w", pady=6)
+             font=self.fonts["body"]).grid(row=0, column=0, sticky="w", pady=6)
     key_var = tk.StringVar(value=self.pipellm_api_key)
-    key_entry = tk.Entry(box, textvariable=key_var, width=46, show="•",
+    key_entry = tk.Entry(box, textvariable=key_var, show="•",
                          bg="#45475a", fg="#cdd6f4", insertbackground="white",
-                         relief="flat", font=("Arial", 11))
-    key_entry.grid(row=0, column=1, pady=6, padx=(12, 0))
+                         relief="flat", font=self.fonts["body"])
+    key_entry.grid(row=0, column=1, sticky="ew", pady=6, padx=(12, 0))
 
     show_var = tk.BooleanVar(value=False)
 
@@ -59,16 +50,16 @@ def build_settings_page(app):
 
     tk.Checkbutton(box, text="显示", variable=show_var, command=toggle_show,
                    bg="#313244", fg="#cdd6f4", selectcolor="#45475a",
-                   activebackground="#313244", font=("Arial", 10)).grid(row=0, column=2, padx=8)
+                   activebackground="#313244", font=self.fonts["small"]).grid(row=0, column=2, padx=8)
 
     tk.Label(box, text="Base URL:", bg="#313244", fg="#cdd6f4",
-             font=("Arial", 11)).grid(row=1, column=0, sticky="w", pady=4)
+             font=self.fonts["body"]).grid(row=1, column=0, sticky="w", pady=4)
     tk.Label(box, text=f"{PIPELLM_BASE_URL}  |  模型: {PIPELLM_MODEL}",
-             bg="#313244", fg="#6c7086", font=("Arial", 10)).grid(row=1, column=1, sticky="w", padx=(12, 0))
+             bg="#313244", fg="#6c7086", font=self.fonts["small"], justify="left", wraplength=720).grid(row=1, column=1, sticky="w", padx=(12, 0))
 
     api_status = tk.StringVar(value="")
     tk.Label(box, textvariable=api_status, bg="#313244",
-             font=("Arial", 10)).grid(row=2, columnspan=3, sticky="w", pady=(2, 0))
+             font=self.fonts["small"], justify="left", wraplength=820).grid(row=2, columnspan=3, sticky="w", pady=(2, 0))
 
     def save_key():
         key = key_var.get().strip()
@@ -106,12 +97,8 @@ def build_settings_page(app):
 
     btn_row1 = tk.Frame(sec1, bg="#313244")
     btn_row1.pack(anchor="w", pady=(10, 0))
-    tk.Button(btn_row1, text="保存", bg="#a6e3a1", fg="#1e1e2e",
-              relief="flat", cursor="hand2", font=("Arial", 11, "bold"),
-              padx=14, pady=5, command=save_key).pack(side="left", padx=(0, 10))
-    tk.Button(btn_row1, text="测试连接", bg="#89b4fa", fg="#1e1e2e",
-              relief="flat", cursor="hand2", font=("Arial", 11, "bold"),
-              padx=14, pady=5, command=test_key).pack(side="left")
+    RoundedButton(btn_row1, text="保存", font=self.fonts["button"], variant="primary", min_width=88, command=save_key).pack(side="left", padx=(0, 10))
+    RoundedButton(btn_row1, text="测试连接", font=self.fonts["button"], variant="accent", min_width=110, command=test_key).pack(side="left")
 
     sec2 = make_section(inner, "证件照换白底模型（rembg）")
 
@@ -130,7 +117,7 @@ def build_settings_page(app):
     rembg_status = tk.StringVar(value=status_text)
     rembg_status_label = tk.Label(sec2, textvariable=rembg_status,
                                   bg="#313244", fg="#a6e3a1" if is_ready else "#f38ba8",
-                                  font=("Arial", 10, "bold"))
+                                  font=self.fonts["section"])
     rembg_status_label.pack(anchor="w", pady=(0, 4))
 
     def refresh_status():
@@ -138,16 +125,14 @@ def build_settings_page(app):
         rembg_status.set(text)
         rembg_status_label.config(fg="#a6e3a1" if ready else "#f38ba8")
 
-    tk.Button(sec2, text="刷新状态", bg="#45475a", fg="#cdd6f4",
-              relief="flat", cursor="hand2", font=("Arial", 9),
-              padx=8, pady=3, command=refresh_status).pack(anchor="w", pady=(0, 8))
+    RoundedButton(sec2, text="刷新状态", font=self.fonts["small"], variant="secondary", min_width=96, command=refresh_status).pack(anchor="w", pady=(0, 8))
 
     tk.Label(sec2,
              text="rembg 使用 U2Net 模型自动识别人像轮廓，适合复杂背景、阴影和发丝边缘。",
-             bg="#313244", fg="#6c7086", font=("Arial", 10), justify="left").pack(anchor="w", pady=(0, 10))
+             bg="#313244", fg="#6c7086", font=self.fonts["small"], justify="left", wraplength=820).pack(anchor="w", pady=(0, 10))
 
     install_log = _st.ScrolledText(sec2, height=6, bg="#181825", fg="#a6e3a1",
-                                   font=("Courier", 9), wrap="word")
+                                   font=self.fonts["mono"], wrap="word")
     install_log.pack(fill="x")
 
     def install_rembg():
@@ -226,12 +211,8 @@ def build_settings_page(app):
 
     btn_row2 = tk.Frame(sec2, bg="#313244")
     btn_row2.pack(anchor="w", pady=(10, 0))
-    tk.Button(btn_row2, text="安装 rembg", bg="#cba6f7", fg="#1e1e2e",
-              relief="flat", cursor="hand2", font=("Arial", 11, "bold"),
-              padx=14, pady=5, command=install_rembg).pack(side="left", padx=(0, 10))
-    tk.Button(btn_row2, text="下载模型", bg="#f9e2af", fg="#1e1e2e",
-              relief="flat", cursor="hand2", font=("Arial", 11, "bold"),
-              padx=14, pady=5, command=download_model).pack(side="left")
+    RoundedButton(btn_row2, text="安装 rembg", font=self.fonts["button"], variant="purple", min_width=120, command=install_rembg).pack(side="left", padx=(0, 10))
+    RoundedButton(btn_row2, text="下载模型", font=self.fonts["button"], variant="warning", min_width=120, command=download_model).pack(side="left")
 
     sec3 = make_section(inner, "使用说明")
     for line in [
@@ -241,4 +222,4 @@ def build_settings_page(app):
         "• 图片工具适合批量处理，证件照换白底适合单张精修。",
     ]:
         tk.Label(sec3, text=line, bg="#313244", fg="#6c7086",
-                 font=("Arial", 10)).pack(anchor="w", pady=2)
+                 font=self.fonts["small"], justify="left", wraplength=820).pack(anchor="w", pady=2)
