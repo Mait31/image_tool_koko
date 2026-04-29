@@ -21,16 +21,23 @@
   - 安装 `rembg`
   - 下载 `U2Net` 模型
 
-## 源码运行
+## 安装
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
+
+## 运行
+
+### 方式一：直接运行启动文件
+
+```powershell
 python koko_gui.py
 ```
 
-也可以直接运行包入口：
+### 方式二：运行包入口
 
 ```powershell
 python -m koko_app
