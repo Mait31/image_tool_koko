@@ -43,6 +43,30 @@ python koko_gui.py
 python -m koko_app
 ```
 
+## macOS 源码运行
+
+如果不打包成 `.app`，在 macOS 上直接运行源码通常更稳：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 koko_gui.py
+```
+
+也可以运行包入口：
+
+```bash
+python3 -m koko_app
+```
+
+说明：
+
+- 需要本机 `python3` 可用
+- 需要当前 Python 自带可用的 `tkinter`
+- 如果要用 OCR，在“设置”中填写 `PipeLLM API Key`
+- 如果要获得更好的白底处理效果，建议额外安装 `rembg[cpu]` 并下载 `U2Net` 模型
+
 ## 可选依赖
 
 - `rembg[cpu]`
@@ -66,7 +90,7 @@ python -m koko_app
 
 - `dist\LocalImageOcrToolbox\`
 
-不要只发送 `.exe`，程序依赖同目录下的其他运行文件。
+不要只发送 `.exe`，程序依赖同目录下的 `_internal` 和其他运行文件。
 
 ### 首次使用说明
 

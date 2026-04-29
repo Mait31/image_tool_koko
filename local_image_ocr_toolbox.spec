@@ -1,18 +1,50 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+import sys
+
 from PyInstaller.utils.hooks import collect_submodules
 
-hiddenimports = collect_submodules("scipy")
+python_base = Path(sys.base_prefix)
+tcl_root = python_base / "tcl"
+dll_root = python_base / "DLLs"
+
+hiddenimports = (
+    collect_submodules("scipy")
+    + [
+        "tkinter",
+        "tkinter.ttk",
+        "tkinter.scrolledtext",
+        "tkinter.filedialog",
+        "tkinter.messagebox",
+        "tkinter.simpledialog",
+        "tkinter.font",
+        "tkinter.colorchooser",
+        "tkinter.commondialog",
+        "tkinter.constants",
+        "tkinter.dialog",
+    ]
+)
+
+binaries = [
+    (str(dll_root / "tcl86t.dll"), "."),
+    (str(dll_root / "tk86t.dll"), "."),
+]
+
+datas = [
+    (str(tcl_root / "tcl8.6"), "_tcl_data"),
+    (str(tcl_root / "tk8.6"), "_tk_data"),
+]
 
 a = Analysis(
     ["koko_gui.py"],
     pathex=[],
-    binaries=[],
-    datas=[],
+    binaries=binaries,
+    datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
+    hookspath=["pyinstaller_hooks"],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=["pyinstaller_runtime_hook.py"],
     excludes=[],
     noarchive=False,
 )
