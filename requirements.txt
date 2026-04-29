@@ -1,0 +1,11 @@
+requests
+anthropic
+pillow
+numpy
+scipy
+pymupdf
+openpyxl
+
+# Optional runtime dependencies:
+# rembg[cpu]
+# pdf2image
