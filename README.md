@@ -80,19 +80,32 @@ python3 -c "import tkinter; print(tkinter.TkVersion)"
 brew install python@3.11
 ```
 
+如果你的 Mac 还没有安装 Homebrew，可以先在终端执行：
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+安装完 Python 后，可以继续验证：
+
+```bash
+python3.11 --version
+python3.11 -c "import tkinter; print(tkinter.TkVersion)"
+```
+
 ### 再运行项目源码
 
 ```bash
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python3 koko_gui.py
+python koko_gui.py
 ```
 
 也可以运行包入口：
 
 ```bash
-python3 -m koko_app
+python -m koko_app
 ```
 
 说明：
