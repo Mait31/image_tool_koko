@@ -79,7 +79,7 @@ def build_image_tools_page(app):
     )
     tk.Label(
         inner,
-        text="批量处理文件夹内的护照 PDF / 图片：自动裁剪、可选换白底、可选压缩大小。",
+        text="批量处理文件夹内的图片：自动裁剪、可选换白底、可选压缩大小。",
         bg="#1e1e2e",
         fg="#6c7086",
         font=self.fonts["small"],
@@ -97,20 +97,18 @@ def build_image_tools_page(app):
         result = []
         for root, _, files in os.walk(folder):
             for file_name in files:
-                if file_name.lower().endswith((".pdf", ".jpg", ".jpeg", ".png")):
+                if file_name.lower().endswith((".jpg", ".jpeg", ".png")):
                     result.append(os.path.join(root, file_name))
         return result
 
     def choose_folder():
-        folder = filedialog.askdirectory(title="选择包含护照 PDF / 图片的文件夹")
+        folder = filedialog.askdirectory(title="选择包含图片的文件夹")
         if not folder:
             return
         folder_var.set(folder)
         folder_label.set(folder)
         files = scan_files(folder)
-        pdfs = [f for f in files if f.lower().endswith(".pdf")]
-        imgs = [f for f in files if f.lower().endswith((".jpg", ".jpeg", ".png"))]
-        count_var.set(f"找到 PDF: {len(pdfs)} 个，图片: {len(imgs)} 个，共 {len(files)} 个文件")
+        count_var.set(f"找到图片: {len(files)} 个")
 
     row = tk.Frame(sec1, bg="#313244")
     row.pack(fill="x")
@@ -277,43 +275,71 @@ def build_image_tools_page(app):
             else:
                 for file_name in os.listdir(folder):
                     file_path = os.path.join(folder, file_name)
-                    if os.path.isfile(file_path) and file_name.lower().endswith((".pdf", ".jpg", ".jpeg", ".png")):
+                    if os.path.isfile(file_path) and file_name.lower().endswith((".jpg", ".jpeg", ".png")):
                         all_files.append(file_path)
 
             total = len(all_files)
             self.after(0, lambda: bar.configure(maximum=max(total, 1), value=0))
 
             if total == 0:
-                self.after(0, lambda: prog_var.set("未找到 PDF 或图片文件"))
+                self.after(0, lambda: prog_var.set("未找到图片文件"))
                 self.after(0, lambda: start_btn.configure_button(state="normal", text="▶ 开始处理"))
                 return
+
+            def target_format_for(path):
+                ext = os.path.splitext(path)[1].lower()
+                if ext == ".png":
+                    return "PNG"
+                return "JPEG"
+
+            def save_image(img, path, max_kb_value=None):
+                fmt = target_format_for(path)
+
+                if fmt == "PNG":
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG", optimize=True)
+                    return buf
+
+                if max_kb_value is not None:
+                    quality = 85
+                    while quality >= 30:
+                        buf = io.BytesIO()
+                        img.save(buf, format="JPEG", quality=quality)
+                        if buf.tell() / 1024 <= max_kb_value:
+                            return buf
+                        quality -= 10
+
+                    width, height = img.size
+                    while width > 400:
+                        width, height = int(width * 0.75), int(height * 0.75)
+                        resized = img.resize((width, height), PILImage.LANCZOS)
+                        buf = io.BytesIO()
+                        resized.save(buf, format="JPEG", quality=60)
+                        if buf.tell() / 1024 <= max_kb_value:
+                            return buf
+
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=90)
+                return buf
 
             ok = fail = 0
             for idx, file_path in enumerate(all_files):
                 name = os.path.basename(file_path)
                 self.after(0, lambda n=name, i=idx: prog_var.set(f"处理中 ({i+1}/{total}): {n}"))
                 try:
+                    out_ext = os.path.splitext(file_path)[1]
                     if mode == "subfolder":
                         rel = os.path.relpath(file_path, folder)
                         rel_dir = os.path.dirname(rel)
                         out_dir = os.path.join(folder, "processed", rel_dir)
                         os.makedirs(out_dir, exist_ok=True)
-                        out_path = os.path.join(out_dir, os.path.splitext(name)[0] + ".jpg")
+                        out_path = os.path.join(out_dir, os.path.splitext(name)[0] + out_ext)
                     else:
-                        out_path = os.path.splitext(file_path)[0] + ".jpg"
+                        out_path = file_path
 
-                    if file_path.lower().endswith(".pdf"):
-                        img_buf, _ = self._pdf_to_image_bytes(file_path, max_kb=max_kb if do_limit else 99999)
-                        if img_buf is None:
-                            fail += 1
-                            self.after(0, lambda n=name: log(f"❌ PDF 转换失败: {n}"))
-                            self.after(0, lambda v=idx + 1: bar.configure(value=v))
-                            continue
-                        img = PILImage.open(img_buf).convert("RGB")
-                    else:
-                        img = PILImage.open(file_path).convert("RGB")
-                        if do_crop:
-                            img = self._auto_crop_passport(img)
+                    img = PILImage.open(file_path).convert("RGB")
+                    if do_crop:
+                        img = self._auto_crop_passport(img)
 
                     if opt_whitebg.get():
                         temp = io.BytesIO()
@@ -321,27 +347,7 @@ def build_image_tools_page(app):
                         result = self._make_white_background(temp.getvalue())
                         img = PILImage.open(io.BytesIO(result)).convert("RGB")
 
-                    if do_limit:
-                        quality = 85
-                        while quality >= 30:
-                            buf = io.BytesIO()
-                            img.save(buf, format="JPEG", quality=quality)
-                            if buf.tell() / 1024 <= max_kb:
-                                break
-                            quality -= 10
-                        else:
-                            width, height = img.size
-                            while width > 400:
-                                width, height = int(width * 0.75), int(height * 0.75)
-                                resized = img.resize((width, height), PILImage.LANCZOS)
-                                buf = io.BytesIO()
-                                resized.save(buf, format="JPEG", quality=60)
-                                if buf.tell() / 1024 <= max_kb:
-                                    break
-                    else:
-                        buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=90)
-
+                    buf = save_image(img, out_path, max_kb if do_limit else None)
                     buf.seek(0)
                     with open(out_path, "wb") as handle:
                         handle.write(buf.read())

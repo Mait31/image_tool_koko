@@ -100,7 +100,7 @@ def build_settings_page(app):
     RoundedButton(btn_row1, text="保存", font=self.fonts["button"], variant="primary", min_width=88, command=save_key).pack(side="left", padx=(0, 10))
     RoundedButton(btn_row1, text="测试连接", font=self.fonts["button"], variant="accent", min_width=110, command=test_key).pack(side="left")
 
-    sec2 = make_section(inner, "证件照换白底模型（rembg）")
+    sec2 = make_section(inner, "证件照换白底依赖")
 
     def check_rembg_status():
         state = get_rembg_state()
@@ -120,6 +120,16 @@ def build_settings_page(app):
                                   font=self.fonts["section"])
     rembg_status_label.pack(anchor="w", pady=(0, 4))
 
+    tk.Label(
+        sec2,
+        text="要使用证件照换白底，下面两步都需要完成，而且顺序固定：先安装 rembg，再下载 U2Net 模型。",
+        bg="#313244",
+        fg="#cdd6f4",
+        font=self.fonts["body"],
+        justify="left",
+        wraplength=820,
+    ).pack(anchor="w", pady=(0, 8))
+
     def refresh_status():
         text, ready = check_rembg_status()
         rembg_status.set(text)
@@ -128,7 +138,7 @@ def build_settings_page(app):
     RoundedButton(sec2, text="刷新状态", font=self.fonts["small"], variant="secondary", min_width=96, command=refresh_status).pack(anchor="w", pady=(0, 8))
 
     tk.Label(sec2,
-             text="rembg 使用 U2Net 模型自动识别人像轮廓，适合复杂背景、阴影和发丝边缘。",
+             text="第 1 步安装 rembg：安装本地抠图程序包。第 2 步下载模型：下载 rembg 运行时需要的 U2Net 模型文件。少任意一步都不能正常换白底。",
              bg="#313244", fg="#6c7086", font=self.fonts["small"], justify="left", wraplength=820).pack(anchor="w", pady=(0, 10))
 
     install_log = _st.ScrolledText(sec2, height=6, bg="#181825", fg="#a6e3a1",
@@ -211,14 +221,15 @@ def build_settings_page(app):
 
     btn_row2 = tk.Frame(sec2, bg="#313244")
     btn_row2.pack(anchor="w", pady=(10, 0))
-    RoundedButton(btn_row2, text="安装 rembg", font=self.fonts["button"], variant="purple", min_width=120, command=install_rembg).pack(side="left", padx=(0, 10))
-    RoundedButton(btn_row2, text="下载模型", font=self.fonts["button"], variant="warning", min_width=120, command=download_model).pack(side="left")
+    RoundedButton(btn_row2, text="1. 安装 rembg", font=self.fonts["button"], variant="purple", min_width=150, command=install_rembg).pack(side="left", padx=(0, 10))
+    RoundedButton(btn_row2, text="2. 下载模型", font=self.fonts["button"], variant="warning", min_width=150, command=download_model).pack(side="left")
 
     sec3 = make_section(inner, "使用说明")
     for line in [
         "• PipeLLM API Key 用于本地 OCR 和通用 AI 辅助能力。",
-        "• rembg 用于人物抠图和证件照白底处理。",
-        "• rembg 模型首次使用时会缓存到 ~/.u2net/u2net.onnx。",
+        "• 证件照换白底需要先安装 rembg，再下载 U2Net 模型。",
+        "• rembg 用于人物抠图，U2Net 是 rembg 运行时需要的模型文件。",
+        "• 模型首次使用时会缓存到 ~/.u2net/u2net.onnx。",
         "• 图片工具适合批量处理，证件照换白底适合单张精修。",
     ]:
         tk.Label(sec3, text=line, bg="#313244", fg="#6c7086",
