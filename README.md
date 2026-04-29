@@ -7,6 +7,18 @@
 - 证件照换白底
 - 使用 PipeLLM 进行 OCR / AI 辅助识别
 
+## Python 版本
+
+推荐使用：
+
+- `Python 3.11`
+
+也可以尝试：
+
+- `Python 3.12`
+
+不建议优先使用过新的 `Python 3.13`，以免遇到 `numpy`、`scipy`、`PyMuPDF` 等依赖的兼容性问题。
+
 ## 当前功能
 
 - 图片工具
@@ -46,6 +58,29 @@ python -m koko_app
 ## macOS 源码运行
 
 如果不打包成 `.app`，在 macOS 上直接运行源码通常更稳：
+
+### 先安装 Python
+
+推荐方式：
+
+1. 打开 `https://www.python.org/downloads/macos/`
+2. 下载并安装 `Python 3.11`
+3. 安装完成后，在终端里确认：
+
+```bash
+python3 --version
+python3 -c "import tkinter; print(tkinter.TkVersion)"
+```
+
+如果第二条命令能正常输出版本号，说明当前 Python 自带的 `tkinter` 可用。
+
+也可以用 Homebrew 安装：
+
+```bash
+brew install python@3.11
+```
+
+### 再运行项目源码
 
 ```bash
 python3 -m venv .venv
