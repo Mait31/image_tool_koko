@@ -139,46 +139,183 @@ def auto_crop_passport(img):
     import numpy as np
 
     try:
-        gray = img.convert("L")
+        rgb = img.convert("RGB")
         w, h = img.size
-        pixels = np.array(gray)
 
-        corners = [pixels[0, 0], pixels[0, -1], pixels[-1, 0], pixels[-1, -1]]
-        bg_val = int(sum(corners) / len(corners))
+        def finalize_box(left, top, right, bottom, w0, h0, pad_ratio=0.035, bottom_ratio=0.05):
+            crop_w_raw = right - left
+            crop_h_raw = bottom - top
+            if crop_w_raw <= 0 or crop_h_raw <= 0:
+                return None
 
-        if bg_val < 100:
-            mask = pixels > 40
-        else:
-            mask = pixels < 240
+            pad_x = max(14, int(crop_w_raw * pad_ratio))
+            pad_top = max(14, int(crop_h_raw * pad_ratio))
+            pad_bottom = max(18, int(crop_h_raw * bottom_ratio))
 
-        rows = np.any(mask, axis=1)
-        cols = np.any(mask, axis=0)
+            left = max(0, left - pad_x)
+            right = min(w0, right + pad_x)
+            top = max(0, top - pad_top)
+            bottom = min(h0, bottom + pad_bottom)
 
-        if not rows.any() or not cols.any():
-            return img
+            crop_w = right - left
+            crop_h = bottom - top
+            crop_ratio = (crop_w * crop_h) / float(w0 * h0)
+            long_short_ratio = max(crop_w, crop_h) / float(max(1, min(crop_w, crop_h)))
 
-        top = int(np.argmax(rows))
-        bottom = int(len(rows) - np.argmax(rows[::-1]) - 1)
-        left = int(np.argmax(cols))
-        right = int(len(cols) - np.argmax(cols[::-1]) - 1)
+            if crop_ratio < 0.26 or crop_ratio > 0.9:
+                return None
+            if long_short_ratio < 1.15 or long_short_ratio > 1.9:
+                return None
+            return (left, top, right, bottom)
 
-        pad_x = max(20, int((right - left) * 0.05))
-        pad_y = max(20, int((bottom - top) * 0.05))
-        top = max(0, top - pad_y)
-        bottom = min(h, bottom + pad_y)
-        left = max(0, left - pad_x)
-        right = min(w, right + pad_x)
+        def detect_box(base_img):
+            arr = np.array(base_img, dtype=np.int16)
+            gray = np.array(base_img.convert("L"), dtype=np.int16)
+            w0, h0 = base_img.size
 
-        crop_w = right - left
-        crop_h = bottom - top
+            try:
+                from scipy import ndimage as ndi
 
-        if crop_w < w * 0.3 or crop_h < h * 0.3:
-            return img
-        if crop_w < w * 0.95 or crop_h < h * 0.95:
-            return img.crop((left, top, right, bottom))
+                gray_f = gray.astype(np.float32)
+                mean = ndi.uniform_filter(gray_f, size=25)
+                mean2 = ndi.uniform_filter(gray_f * gray_f, size=25)
+                var = np.maximum(0, mean2 - mean * mean)
+                var_mask = var > np.percentile(var, 70)
+                var_mask = ndi.binary_opening(var_mask, iterations=1)
+                var_mask = ndi.binary_closing(var_mask, iterations=3)
+                var_mask = ndi.binary_fill_holes(var_mask)
+                labels, count = ndi.label(var_mask)
+                if count > 0:
+                    best_box = None
+                    best_area = 0
+                    for slc in ndi.find_objects(labels):
+                        if slc is None:
+                            continue
+                        top, bottom = slc[0].start, slc[0].stop
+                        left, right = slc[1].start, slc[1].stop
+                        area = (bottom - top) * (right - left)
+                        if area > best_area:
+                            best_area = area
+                            best_box = (left, top, right, bottom)
+                    if best_box is not None:
+                        final_box = finalize_box(*best_box, w0, h0, pad_ratio=0.03, bottom_ratio=0.045)
+                        if final_box is not None:
+                            return final_box
+            except Exception:
+                pass
+
+            edge_rgb = np.concatenate([
+                arr[:20, :, :].reshape(-1, 3),
+                arr[-20:, :, :].reshape(-1, 3),
+                arr[:, :20, :].reshape(-1, 3),
+                arr[:, -20:, :].reshape(-1, 3),
+            ])
+            bg_rgb = np.median(edge_rgb, axis=0)
+            diff = np.abs(arr - bg_rgb).sum(axis=2)
+            brightness = arr.mean(axis=2)
+            saturation = arr.max(axis=2) - arr.min(axis=2)
+            bg_mask = (diff < 42) | ((brightness > 232) & (saturation < 28))
+
+            try:
+                from scipy import ndimage as ndi
+
+                seed = np.zeros((h0, w0), dtype=bool)
+                seed[:8, :] = True
+                seed[-8:, :] = True
+                seed[:, :8] = True
+                seed[:, -8:] = True
+
+                bg_region = ndi.binary_propagation(seed, mask=bg_mask)
+                mask = ~bg_region
+                mask = ndi.binary_opening(mask, iterations=1)
+                mask = ndi.binary_fill_holes(mask)
+                mask = ndi.binary_closing(mask, iterations=3)
+                labels, count = ndi.label(mask)
+                if count == 0:
+                    return None
+
+                best_box = None
+                best_area = 0
+                for slc in ndi.find_objects(labels):
+                    if slc is None:
+                        continue
+                    top, bottom = slc[0].start, slc[0].stop
+                    left, right = slc[1].start, slc[1].stop
+                    area = (bottom - top) * (right - left)
+                    if area > best_area:
+                        best_area = area
+                        best_box = (left, top, right, bottom)
+
+                if best_box is None:
+                    return None
+                left, top, right, bottom = best_box
+            except Exception:
+                rows = ~np.all(bg_mask, axis=1)
+                cols = ~np.all(bg_mask, axis=0)
+                if not rows.any() or not cols.any():
+                    return None
+                top = int(np.argmax(rows))
+                bottom = int(len(rows) - np.argmax(rows[::-1]))
+                left = int(np.argmax(cols))
+                right = int(len(cols) - np.argmax(cols[::-1]))
+
+            return finalize_box(left, top, right, bottom, w0, h0, pad_ratio=0.02, bottom_ratio=0.04)
+
+        candidates = []
+        for angle in (0, 90, 180, 270):
+            rotated = rgb.rotate(angle, expand=True) if angle else rgb
+            box = detect_box(rotated)
+            if box is None:
+                continue
+            l, t, r, b = box
+            area = (r - l) * (b - t)
+            candidates.append((area, angle, box))
+
+        if candidates:
+            _, angle, box = min(candidates, key=lambda item: item[0])
+            rotated = rgb.rotate(angle, expand=True) if angle else rgb
+            return rotated.crop(box)
         return img
     except Exception:
         return img
+
+
+def looks_like_passport_image(img):
+    import numpy as np
+
+    def check_one(base_img):
+        try:
+            gray = base_img.convert("L")
+            pixels = np.array(gray, dtype=np.uint8)
+            h, w = pixels.shape
+
+            if min(h, w) < 300:
+                return False
+
+            step = max(1, int(max(h, w) / 1200))
+            if step > 1:
+                pixels = pixels[::step, ::step]
+                h, w = pixels.shape
+
+            binary = pixels < 185
+            row_dark = binary.mean(axis=1)
+            col_dark = binary.mean(axis=0)
+
+            text_rows = ((row_dark > 0.015) & (row_dark < 0.25)).sum()
+            text_cols = ((col_dark > 0.015) & (col_dark < 0.35)).sum()
+
+            dark_ratio = float(binary.mean())
+            if dark_ratio < 0.01 or dark_ratio > 0.45:
+                return False
+
+            gx = np.abs(np.diff(pixels.astype(np.int16), axis=1))
+            gy = np.abs(np.diff(pixels.astype(np.int16), axis=0))
+            edge_score = float(((gx > 22).mean() + (gy > 22).mean()) / 2.0)
+            return text_rows >= max(12, int(h * 0.08)) and text_cols >= max(8, int(w * 0.04)) and edge_score > 0.035
+        except Exception:
+            return False
+
+    return any(check_one(img.rotate(angle, expand=True) if angle else img) for angle in (0, 90, 180, 270))
 
 
 def pdf_to_image_bytes(pdf_path, max_kb=900):

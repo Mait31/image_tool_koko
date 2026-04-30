@@ -79,7 +79,7 @@ def build_image_tools_page(app):
     )
     tk.Label(
         inner,
-        text="批量处理文件夹内的图片：自动裁剪、可选换白底、可选压缩大小。",
+        text="批量处理文件夹内的护照 PDF / 图片：自动裁剪、可选换白底、可选压缩大小。",
         bg="#1e1e2e",
         fg="#6c7086",
         font=self.fonts["small"],
@@ -97,18 +97,20 @@ def build_image_tools_page(app):
         result = []
         for root, _, files in os.walk(folder):
             for file_name in files:
-                if file_name.lower().endswith((".jpg", ".jpeg", ".png")):
+                if file_name.lower().endswith((".pdf", ".jpg", ".jpeg", ".png")):
                     result.append(os.path.join(root, file_name))
         return result
 
     def choose_folder():
-        folder = filedialog.askdirectory(title="选择包含图片的文件夹")
+        folder = filedialog.askdirectory(title="选择包含护照 PDF / 图片的文件夹")
         if not folder:
             return
         folder_var.set(folder)
         folder_label.set(folder)
         files = scan_files(folder)
-        count_var.set(f"找到图片: {len(files)} 个")
+        pdfs = [f for f in files if f.lower().endswith(".pdf")]
+        imgs = [f for f in files if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+        count_var.set(f"找到 PDF: {len(pdfs)} 个，图片: {len(imgs)} 个，共 {len(files)} 个文件")
 
     row = tk.Frame(sec1, bg="#313244")
     row.pack(fill="x")
@@ -143,7 +145,7 @@ def build_image_tools_page(app):
 
     tk.Checkbutton(
         sec2,
-        text="自动裁剪护照 / 人像区域",
+        text="自动裁剪护照区域（PDF 默认裁剪，图片仅对疑似护照页裁剪）",
         variable=opt_crop,
         bg="#313244",
         fg="#cdd6f4",
@@ -204,7 +206,7 @@ def build_image_tools_page(app):
     ).pack(anchor="w", pady=(6, 0))
     tk.Radiobutton(
         sec2,
-        text="直接覆盖原文件",
+        text="直接覆盖原图片文件（PDF 始终输出为 JPG）",
         variable=out_mode,
         value="same",
         bg="#313244",
@@ -275,14 +277,14 @@ def build_image_tools_page(app):
             else:
                 for file_name in os.listdir(folder):
                     file_path = os.path.join(folder, file_name)
-                    if os.path.isfile(file_path) and file_name.lower().endswith((".jpg", ".jpeg", ".png")):
+                    if os.path.isfile(file_path) and file_name.lower().endswith((".pdf", ".jpg", ".jpeg", ".png")):
                         all_files.append(file_path)
 
             total = len(all_files)
             self.after(0, lambda: bar.configure(maximum=max(total, 1), value=0))
 
             if total == 0:
-                self.after(0, lambda: prog_var.set("未找到图片文件"))
+                self.after(0, lambda: prog_var.set("未找到 PDF 或图片文件"))
                 self.after(0, lambda: start_btn.configure_button(state="normal", text="▶ 开始处理"))
                 return
 
@@ -327,7 +329,8 @@ def build_image_tools_page(app):
                 name = os.path.basename(file_path)
                 self.after(0, lambda n=name, i=idx: prog_var.set(f"处理中 ({i+1}/{total}): {n}"))
                 try:
-                    out_ext = os.path.splitext(file_path)[1]
+                    is_pdf = file_path.lower().endswith(".pdf")
+                    out_ext = ".jpg" if is_pdf else os.path.splitext(file_path)[1]
                     if mode == "subfolder":
                         rel = os.path.relpath(file_path, folder)
                         rel_dir = os.path.dirname(rel)
@@ -335,11 +338,17 @@ def build_image_tools_page(app):
                         os.makedirs(out_dir, exist_ok=True)
                         out_path = os.path.join(out_dir, os.path.splitext(name)[0] + out_ext)
                     else:
-                        out_path = file_path
+                        out_path = os.path.splitext(file_path)[0] + ".jpg" if is_pdf else file_path
 
-                    img = PILImage.open(file_path).convert("RGB")
-                    if do_crop:
-                        img = self._auto_crop_passport(img)
+                    if is_pdf:
+                        img_buf, _ = self._pdf_to_image_bytes(file_path, max_kb=max_kb if do_limit else 99999)
+                        if img_buf is None:
+                            raise RuntimeError("PDF 转换失败")
+                        img = PILImage.open(img_buf).convert("RGB")
+                    else:
+                        img = PILImage.open(file_path).convert("RGB")
+                        if do_crop and self._looks_like_passport_image(img):
+                            img = self._auto_crop_passport(img)
 
                     if opt_whitebg.get():
                         temp = io.BytesIO()
@@ -354,14 +363,14 @@ def build_image_tools_page(app):
 
                     size_kb = os.path.getsize(out_path) / 1024
                     ok += 1
-                    self.after(0, lambda n=name, s=size_kb: log(f"✅ {n} -> {s:.0f} KB"))
+                    self.after(0, lambda n=name, s=size_kb, o=os.path.basename(out_path): log(f"✅ {n} -> {o} -> {s:.0f} KB"))
                 except Exception as exc:
                     fail += 1
                     self.after(0, lambda n=name, err=str(exc): log(f"❌ {n} 错误: {err}"))
 
                 self.after(0, lambda v=idx + 1: bar.configure(value=v))
 
-            out_desc = os.path.join(folder, "processed") if mode == "subfolder" else "原位置（已覆盖）"
+            out_desc = os.path.join(folder, "processed") if mode == "subfolder" else "原位置（图片已覆盖，PDF 输出为 JPG）"
             self.after(0, lambda: prog_var.set("✅ 全部处理完成"))
             self.after(0, lambda: summary_var.set(f"✅ 成功 {ok}  ❌ 失败 {fail}  共 {total} 个 -> 输出: {out_desc}"))
             self.after(0, lambda: start_btn.configure_button(state="normal", text="▶ 开始处理"))

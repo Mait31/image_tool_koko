@@ -8,7 +8,7 @@ import tkinter.font as tkfont
 
 from .config import ensure_runtime_dependencies
 from .config_store import load_api_key, save_api_key
-from .image_service import auto_crop_passport, enhance_passport_image, make_white_background, pdf_to_image_bytes
+from .image_service import auto_crop_passport, enhance_passport_image, looks_like_passport_image, make_white_background, pdf_to_image_bytes
 from .ocr_service import ocr_passport
 from .pages.image_pages import build_image_tools_page
 from .pages.settings_page import build_settings_page
@@ -145,6 +145,9 @@ class App(tk.Tk):
 
     def _auto_crop_passport(self, img):
         return auto_crop_passport(img)
+
+    def _looks_like_passport_image(self, img):
+        return looks_like_passport_image(img)
 
     def _pdf_to_image_bytes(self, pdf_path, max_kb=900):
         return pdf_to_image_bytes(pdf_path, max_kb=max_kb)
