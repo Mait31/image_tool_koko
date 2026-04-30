@@ -7,10 +7,11 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 from .config import ensure_runtime_dependencies
-from .config_store import load_api_key, save_api_key
+from .config_store import load_api_key, load_koko_api_key, load_koko_paths, save_api_key, save_koko_api_key, save_koko_paths
 from .image_service import auto_crop_passport, enhance_passport_image, looks_like_passport_image, make_white_background, pdf_to_image_bytes
 from .ocr_service import ocr_passport
 from .pages.image_pages import build_image_tools_page
+from .pages.koko_pages import build_koko_create_visa_page, build_koko_preprocess_page, build_koko_query_page
 from .pages.settings_page import build_settings_page
 from .widgets import RoundedButton
 
@@ -29,6 +30,8 @@ class App(tk.Tk):
         self.fonts = self._build_fonts()
         self._configure_ui_defaults()
         self.pipellm_api_key = self._load_api_key()
+        self.koko_api_key = self._load_koko_api_key()
+        self.koko_paths = self._load_koko_paths()
         self._build_main()
 
     def _build_fonts(self):
@@ -83,32 +86,33 @@ class App(tk.Tk):
 
         self._recreate_content()
 
-        tool_menus = [
-            ("图片工具", self._page_image_tools),
-            ("设置", self._page_settings),
+        menu_groups = [
+            ("本地工具", [("图片工具", self._page_image_tools), ("设置", self._page_settings)]),
+            ("KOKO", [("预处理归档", self._page_koko_preprocess), ("创建签证申请", self._page_koko_create_visa), ("查询接口", self._page_koko_query)]),
         ]
 
-        tk.Label(
-            sidebar,
-            text="本地工具",
-            bg="#181825",
-            fg="#6c7086",
-            font=self.fonts["small"],
-        ).pack(pady=(16, 4), padx=12, anchor="w")
-
         self._menu_btns = []
-        for label, cmd in tool_menus:
-            btn = RoundedButton(
+        for group_title, tool_menus in menu_groups:
+            tk.Label(
                 sidebar,
-                font=self.fonts["body"],
-                text=label,
-                variant="sidebar",
-                width=150,
-                radius=12,
-                command=lambda c=cmd: self._menu_click(c),
-            )
-            btn.pack(pady=4, padx=12, anchor="w")
-            self._menu_btns.append(btn)
+                text=group_title,
+                bg="#181825",
+                fg="#6c7086",
+                font=self.fonts["small"],
+            ).pack(pady=(16, 4), padx=12, anchor="w")
+
+            for label, cmd in tool_menus:
+                btn = RoundedButton(
+                    sidebar,
+                    font=self.fonts["body"],
+                    text=label,
+                    variant="sidebar",
+                    width=150,
+                    radius=12,
+                    command=lambda c=cmd: self._menu_click(c),
+                )
+                btn.pack(pady=4, padx=12, anchor="w")
+                self._menu_btns.append(btn)
 
         self._page_image_tools()
 
@@ -134,6 +138,22 @@ class App(tk.Tk):
     def _save_api_key(self, key):
         return save_api_key(key)
 
+    def _load_koko_api_key(self):
+        return load_koko_api_key()
+
+    def _save_koko_api_key(self, key):
+        return save_koko_api_key(key)
+
+    def _load_koko_paths(self):
+        return load_koko_paths()
+
+    def _save_koko_paths(self, *, excel_path=None, folder_path=None):
+        if excel_path is not None:
+            self.koko_paths["excel_path"] = excel_path
+        if folder_path is not None:
+            self.koko_paths["folder_path"] = folder_path
+        return save_koko_paths(excel_path=excel_path, folder_path=folder_path)
+
     def _enhance_passport_image(self, img_bytes):
         return enhance_passport_image(img_bytes)
 
@@ -157,6 +177,15 @@ class App(tk.Tk):
 
     def _page_image_tools(self):
         build_image_tools_page(self)
+
+    def _page_koko_create_visa(self):
+        build_koko_create_visa_page(self)
+
+    def _page_koko_preprocess(self):
+        build_koko_preprocess_page(self)
+
+    def _page_koko_query(self):
+        build_koko_query_page(self)
 
 def main():
     app = App()

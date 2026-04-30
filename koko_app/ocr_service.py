@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import re
 
@@ -115,26 +116,54 @@ def normalize_passport_fields(info):
     return info
 
 
+def _rotate_image_bytes(img_bytes, angle):
+    if not angle:
+        return img_bytes
+    try:
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        rotated = img.rotate(angle, expand=True)
+        out = io.BytesIO()
+        rotated.save(out, format="JPEG", quality=92)
+        return out.getvalue()
+    except Exception:
+        return img_bytes
+
+
 def ocr_passport(api_key, img_bytes):
-    last_raw_text = [""]
+    best_result = None
+    last_error = ""
 
-    try:
-        enhanced = enhance_passport_image(img_bytes)
-        result = _call_pipe_llm(api_key, enhanced, PASSPORT_OCR_PROMPT, last_raw_text)
-        if result.get("passport_number"):
-            return normalize_passport_fields(result)
-    except Exception as exc:
-        result = {"error": f"API 调用失败: {exc}"}
+    for angle in (0, 90, 270, 180):
+        rotated_bytes = _rotate_image_bytes(img_bytes, angle)
+        attempt_bytes_list = [rotated_bytes, enhance_passport_image(rotated_bytes)]
 
-    try:
-        result2 = _call_pipe_llm(api_key, img_bytes, PASSPORT_OCR_PROMPT, last_raw_text)
-        if result2.get("passport_number"):
-            return normalize_passport_fields(result2)
-        for key, value in result2.items():
-            if isinstance(value, str) and re.match(r"^[A-Z]{1,2}[0-9]{6,8}$", value.strip()):
-                result2["passport_number"] = value.strip()
-                return normalize_passport_fields(result2)
-        result2["error"] = f"OCR 未识别出护照号 | 原始响应: {last_raw_text[0][:400]}"
-        return result2
-    except Exception as exc:
-        return {"error": f"API 调用失败(原图重试): {exc} | 原始响应: {last_raw_text[0][:200]}"}
+        if angle in (180, 270):
+            attempt_bytes_list = [rotated_bytes]
+
+        for attempt_idx, attempt_bytes in enumerate(attempt_bytes_list, start=1):
+            last_raw_text = [""]
+            try:
+                result = _call_pipe_llm(api_key, attempt_bytes, PASSPORT_OCR_PROMPT, last_raw_text)
+                if isinstance(result, dict):
+                    for key, value in result.items():
+                        if isinstance(value, str) and re.match(r"^[A-Z]{1,2}[0-9]{6,8}$", value.strip()) and not result.get("passport_number"):
+                            result["passport_number"] = value.strip()
+                            break
+
+                    normalized = normalize_passport_fields(result)
+                    if normalized.get("passport_number") and normalized.get("name"):
+                        return normalized
+                    if normalized.get("passport_number") and best_result is None:
+                        best_result = normalized
+                    if normalized.get("name"):
+                        return normalized
+            except Exception as exc:
+                last_error = f"角度 {angle} / 尝试 {attempt_idx} 失败: {exc} | 原始响应: {last_raw_text[0][:200]}"
+
+    if best_result is not None:
+        best_result["error"] = best_result.get("error") or "OCR 识别到了护照号，但未稳定识别出中文姓名"
+        return best_result
+
+    return {"error": last_error or "OCR 未识别出中文姓名"}

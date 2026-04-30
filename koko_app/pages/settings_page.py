@@ -100,6 +100,47 @@ def build_settings_page(app):
     RoundedButton(btn_row1, text="保存", font=self.fonts["button"], variant="primary", min_width=88, command=save_key).pack(side="left", padx=(0, 10))
     RoundedButton(btn_row1, text="测试连接", font=self.fonts["button"], variant="accent", min_width=110, command=test_key).pack(side="left")
 
+    sec_koko = make_section(inner, "KOKO API Key（创建签证申请）")
+    koko_box = tk.Frame(sec_koko, bg="#313244")
+    koko_box.pack(fill="x")
+    koko_box.grid_columnconfigure(1, weight=1)
+
+    tk.Label(koko_box, text="API Key:", bg="#313244", fg="#cdd6f4",
+             font=self.fonts["body"]).grid(row=0, column=0, sticky="w", pady=6)
+    koko_key_var = tk.StringVar(value=self.koko_api_key)
+    koko_key_entry = tk.Entry(koko_box, textvariable=koko_key_var, show="•",
+                              bg="#45475a", fg="#cdd6f4", insertbackground="white",
+                              relief="flat", font=self.fonts["body"])
+    koko_key_entry.grid(row=0, column=1, sticky="ew", pady=6, padx=(12, 0))
+
+    koko_show_var = tk.BooleanVar(value=False)
+
+    def toggle_koko_show():
+        koko_key_entry.config(show="" if koko_show_var.get() else "•")
+
+    tk.Checkbutton(koko_box, text="显示", variable=koko_show_var, command=toggle_koko_show,
+                   bg="#313244", fg="#cdd6f4", selectcolor="#45475a",
+                   activebackground="#313244", font=self.fonts["small"]).grid(row=0, column=2, padx=8)
+
+    koko_status = tk.StringVar(value="")
+    tk.Label(koko_box, textvariable=koko_status, bg="#313244",
+             font=self.fonts["small"], justify="left", wraplength=820).grid(row=1, columnspan=3, sticky="w", pady=(2, 0))
+
+    def save_koko_key():
+        key = koko_key_var.get().strip()
+        if not key:
+            koko_status.set("❌ KOKO API Key 不能为空")
+            return
+        self.koko_api_key = key
+        if self._save_koko_api_key(key):
+            koko_status.set("✅ 已保存 KOKO API Key")
+        else:
+            koko_status.set("⚠️ 保存失败，但当前会话仍会使用该 Key")
+
+    btn_row_koko = tk.Frame(sec_koko, bg="#313244")
+    btn_row_koko.pack(anchor="w", pady=(10, 0))
+    RoundedButton(btn_row_koko, text="保存", font=self.fonts["button"], variant="primary", min_width=88, command=save_koko_key).pack(side="left")
+
     sec2 = make_section(inner, "证件照换白底依赖")
 
     def check_rembg_status():

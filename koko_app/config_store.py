@@ -1,4 +1,5 @@
 import json
+import os
 
 from .config import CONFIG_PATH
 
@@ -28,4 +29,32 @@ def load_api_key():
 def save_api_key(key):
     data = _load_config()
     data["pipellm_api_key"] = key
+    return _save_config(data)
+
+
+def load_koko_api_key():
+    data = _load_config()
+    return data.get("koko_api_key", "") or os.getenv("KOKO_API_KEY", "")
+
+
+def save_koko_api_key(key):
+    data = _load_config()
+    data["koko_api_key"] = key
+    return _save_config(data)
+
+
+def load_koko_paths():
+    data = _load_config()
+    return {
+        "excel_path": data.get("koko_excel_path", "") or "",
+        "folder_path": data.get("koko_folder_path", "") or "",
+    }
+
+
+def save_koko_paths(*, excel_path=None, folder_path=None):
+    data = _load_config()
+    if excel_path is not None:
+        data["koko_excel_path"] = excel_path
+    if folder_path is not None:
+        data["koko_folder_path"] = folder_path
     return _save_config(data)
